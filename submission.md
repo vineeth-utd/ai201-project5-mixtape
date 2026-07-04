@@ -1,4 +1,4 @@
-## Codebase Map
+# Codebase Map
 
 Before looking into any of the reported issues, I spent some time understanding how the application is organized and how requests flow through the different layers.
 
@@ -50,3 +50,33 @@ The overall execution flow for this feature is:
 ### Overall observations
 
 One pattern I noticed throughout the project is that the routes remain intentionally thin, while the service layer contains almost all of the application logic. This separation makes the codebase easier to navigate because each layer has a clear responsibility. After identifying the correct route, I could consistently follow the same execution path into the service layer and then to the underlying models and database operations.
+
+---
+
+# Root Cause Analysis
+
+## Issue #5: The last song in a playlist never shows up
+
+### How I reproduced it
+
+I first seeded the database and started the Flask application. Since there wasn't an endpoint to list all playlists, I opened the Flask shell and queried the `Playlist` model to retrieve a valid playlist ID.
+
+Using that playlist ID, I sent a `GET /playlists/<playlist_id>/songs` request. The API returned 6 songs for the playlist.
+
+To verify whether the issue was with the database or the application's retrieval logic, I opened the Flask shell again and queried the same playlist using SQLAlchemy. I retrieved the songs associated with the playlist through the `playlist_entries` association table and confirmed that the database actually contained 7 songs in the correct order. Since the database contained all 7 songs but the API returned only 6, I confirmed that the last song was being omitted during the retrieval process rather than being missing from the database.
+
+### How I found the root cause
+
+I started from the `GET /playlists/<playlist_id>/songs` route in `routes/playlists.py` and followed the call to `get_playlist_songs()` in `playlist_service.py`. The database query correctly retrieved all songs for the playlist and ordered them using the `position` column from the `playlist_entries` association table.
+
+The point that confirmed the root cause was the return statement. Although the query returned the complete list of songs, the function converted only `songs[:-1]` into the response, which excluded the final song before returning the result.
+
+### The root cause
+
+The database query was returning all songs in the playlist correctly, but the final return statement sliced the list using `songs[:-1]`. In Python, this slice returns every element except the last one. As a result, the API always omitted the final song in the playlist even though it existed in the database and had been retrieved successfully.
+
+### Your fix and side-effect check
+
+I removed the unnecessary list slicing and returned the complete list of songs retrieved by the query. This ensured that every song in the playlist was included in the API response while preserving the existing ordering logic.
+
+After making the change, I called the `GET /playlists/<playlist_id>/songs` endpoint again and confirmed that it now returned all 7 songs in the playlist. I also ran the playlist test suite, and all tests passed successfully, confirming that playlist ordering and empty playlist behavior were not affected by the fix.
