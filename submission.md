@@ -113,3 +113,26 @@ After making the change, I repeated the same API flow I used during reproduction
 
 ---
 
+## Issue #1: My listening streak keeps resetting
+
+### How I reproduced it
+
+I opened the Flask shell, selected a valid user from the database, and called `update_listening_streak()` with two controlled timestamps, first on Saturday and then on Sunday.
+
+After the Saturday update, the listening streak became 1 as expected. I then called the same function with a Sunday timestamp. Instead of incrementing the streak to 2 for two consecutive days, the streak remained at 1. This confirmed that the streak was incorrectly resetting across the Saturday to Sunday boundary.
+
+### How I found the root cause
+
+I traced the listening flow from `POST /songs/<song_id>/listen` in `routes/songs.py` to `record_listening_event()` and then to `update_listening_streak()` in `streak_service.py`, where the streak logic is implemented.
+
+I first read the function's docstring to understand the expected behavior. It states that the streak should increment whenever the user listens on consecutive calendar days. I then compared the implementation with the documented rules and found that the increment logic included an additional condition, `today.weekday() != 6`, which prevented the streak from increasing on Sundays. This mismatch between the documented behavior and the implementation confirmed the root cause.
+
+### The root cause
+
+The `update_listening_streak()` function correctly calculated the number of days since the user's previous listening event, but it only incremented the streak when `days_since_last == 1` **and** the current day was not Sunday. Since `datetime.weekday()` returns `6` for Sunday, every consecutive Saturday to Sunday transition failed the increment condition and fell through to the reset logic instead. This caused the streak to reset even though the user had listened on consecutive days.
+
+### Your fix and side-effect check
+
+I removed the unnecessary Sunday check so that the streak increments whenever the user listens on consecutive calendar days, regardless of which day of the week it is.
+
+After making the change, I repeated the same Saturday to Sunday reproduction and confirmed that the streak now increased from 1 to 2 as expected. I also ran the streak test suite, which passed successfully. This verified that the fix resolved the Sunday edge case while preserving the existing behavior for first-time listens, multiple listens on the same day, and skipped days.
