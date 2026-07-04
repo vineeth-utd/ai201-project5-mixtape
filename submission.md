@@ -1,3 +1,13 @@
+# AI Usage
+
+I used AI primarily to understand the existing codebase and navigate through the different layers before making any code changes. During the orientation phase, I used AI to explain the responsibilities of the main files, summarize how the application was organized, and help trace execution paths from the route layer to the corresponding service functions. This helped me build a codebase map before starting any debugging.
+
+While investigating individual issues, I used AI to explain specific functions after I had already identified them through my own code tracing. For example, I used it to walk through the logic in `get_playlist_songs()`, `rate_song()`, and `update_listening_streak()` to better understand how the code behaved and to compare the implementation with the documented behavior before deciding on a fix.
+
+I did not rely on AI to identify bugs automatically. For every issue, I first reproduced the behavior myself using API requests and Flask shell, then traced the execution flow through the relevant routes and services before confirming the root cause. I also verified AI's explanations by reading the code directly, querying the database where necessary, and rerunning the API calls and automated tests after each fix to confirm that the changes resolved the issue without introducing regressions.
+
+---
+
 # Codebase Map
 
 Before looking into any of the reported issues, I spent some time understanding how the application is organized and how requests flow through the different layers.
