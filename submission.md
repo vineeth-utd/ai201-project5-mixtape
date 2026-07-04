@@ -80,3 +80,36 @@ The database query was returning all songs in the playlist correctly, but the fi
 I removed the unnecessary list slicing and returned the complete list of songs retrieved by the query. This ensured that every song in the playlist was included in the API response while preserving the existing ordering logic.
 
 After making the change, I called the `GET /playlists/<playlist_id>/songs` endpoint again and confirmed that it now returned all 7 songs in the playlist. I also ran the playlist test suite, and all tests passed successfully, confirming that playlist ordering and empty playlist behavior were not affected by the fix.
+
+---
+
+## Issue #4: I got notified when a friend added my song to a playlist but not when they rated it
+
+### How I reproduced it
+
+I first used `User.query.all()` and `Song.query.all()` in the Flask shell to identify a valid user and a song. I selected a user who had already received a notification indicating that another user had added their shared song, **"Midnight Drive,"** to a playlist. This confirmed that the selected user was the owner of that song.
+
+Before rating the song, I called `GET /users/<owner_id>/notifications` and confirmed that the owner had one existing playlist notification.
+
+Next, I sent a `POST /songs/<song_id>/rate` request using a different user's ID and a valid rating score for the same song. The request completed successfully and returned the newly created rating.
+
+Finally, I called `GET /users/<owner_id>/notifications` again. The notification count remained the same, and no new notification was created for the rating action. This confirmed that although the rating was successfully recorded, the song owner was not notified when another user rated their song.
+
+### How I found the root cause
+
+I started by tracing the working notification flow. I followed the `POST /playlists/<playlist_id>/songs` route in `routes/playlists.py`, which calls `notification_service.add_to_playlist()`. That function adds the song to the playlist and then calls `create_notification()` for the original song owner. This explained why playlist additions were generating notifications successfully.
+
+Next, I traced the rating flow by following `POST /songs/<song_id>/rate` in `routes/songs.py` to `notification_service.rate_song()`. The function validated the request, created or updated the `Rating` record, and committed the changes to the database. However, unlike the playlist flow, it never called `create_notification()` before returning the response. Comparing these two similar workflows made it clear that the rating path was missing the notification step.
+
+### The root cause
+
+The `rate_song()` function handled creating or updating the rating correctly, but it returned immediately after saving the `Rating` record without creating a notification for the song owner. As a result, the rating was successfully stored in the database, but there was no code to notify the owner that another user had rated their song. In contrast, the playlist flow explicitly called `create_notification()` after adding a song to a playlist, which is why that feature behaved as expected.
+
+### Your fix and side-effect check
+
+I added notification creation to the rating flow so that when a user rates another person's song, the song owner receives a new `song_rated` notification. To keep the behavior consistent with the playlist flow, the notification is only created when the person rating the song is different from the song owner.
+
+After making the change, I repeated the same API flow I used during reproduction. I checked the song owner's notifications before rating the song, submitted a new rating using a different user, and then checked the notifications again. This time the owner had two notifications instead of one, and the new notification correctly indicated that another user had rated their song. I also verified that the existing playlist notification was still present, confirming that the change fixed the missing rating notification without affecting the existing notification functionality.
+
+---
+
