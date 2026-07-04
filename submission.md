@@ -146,3 +146,11 @@ The `update_listening_streak()` function correctly calculated the number of days
 I removed the unnecessary Sunday check so that the streak increments whenever the user listens on consecutive calendar days, regardless of which day of the week it is.
 
 After making the change, I repeated the same Saturday to Sunday reproduction and confirmed that the streak now increased from 1 to 2 as expected. I also ran the streak test suite, which passed successfully. This verified that the fix resolved the Sunday edge case while preserving the existing behavior for first-time listens, multiple listens on the same day, and skipped days.
+
+---
+
+# Git History
+
+The screenshot below shows the commit history for the `bugfix/mixtape` branch, including separate `fix:` commits for each bug fix.
+
+![Git Log](images/git-log.png)
